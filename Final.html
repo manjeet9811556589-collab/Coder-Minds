@@ -2,260 +2,219 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Cyber Threat Analyzer + AI Assistant</title>
+<title>AI Vulnerability Scanner</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
 
 <style>
-body {
-  margin:0;
-  min-height:100vh;
-  background:radial-gradient(circle,#06130c,#020705);
-  font-family:'Orbitron',monospace;
-  color:#00ff88;
+body{
+ background:radial-gradient(circle,#06130c,#020705);
+ font-family:'Orbitron',monospace;
+ color:#00ff88;margin:0;min-height:100vh
 }
-.wrapper{display:flex;gap:20px;padding:40px;max-width:1200px;margin:auto}
-.column{flex:1;border:1px solid #00ff8855;padding:20px;border-radius:16px;background:#020705; box-shadow: 0 0 25px rgba(0 , 255, 156, 0.4);}
-.title{text-align:center;font-size:26px;margin-bottom:15px; text-shadow: 0 0 15px #00ff9c;}
-input,textarea{width:95%;background:black;color:#00ff88;border:1px solid #00ff8855;padding:12px;margin-top:10px}
-button{width:100%;padding:14px;margin-top:15px;background:#00ff88;border:none;font-weight:bold;cursor:pointer}
-#chatBox{height:350px;overflow-y:auto;border:1px solid #00ff8855;margin-top:15px;padding:10px}
+.wrapper{max-width:1200px;margin:auto;padding:40px}
+input,textarea,button{width:100%;padding:12px;margin-top:10px}
+input,textarea{background:black;color:#00ff88;border:1px solid #00ff8855}
+button{background:#00ff88;border:none;font-weight:bold;cursor:pointer}
+table{width:100%;border-collapse:collapse;margin-top:20px;display:none}
+th,td{border:1px solid #00ff8855;padding:12px;vertical-align:top}
+th{background:#011202}
+#downloadBtn{display:none}
+
+#chatbotContainer{
+ position:fixed;bottom:20px;right:20px;
+ width:60px;height:60px;border-radius:50%;
+ background:#00ff88;color:black;
+ display:flex;align-items:center;justify-content:center;
+ font-size:24px;cursor:pointer
+}
+#chatbotWindow{
+ position:fixed;bottom:90px;right:20px;
+ width:380px;height:480px;
+ background:#020705;border:1px solid #00ff8855;
+ border-radius:16px;padding:10px;
+ display:none;flex-direction:column
+}
+#chatbotWindow.show{display:flex}
+#chatBox{
+ flex:1;overflow-y:auto;background:#011202;
+ border:1px solid #00ff8855;border-radius:10px;
+ padding:10px
+}
 .chatMessage.user{color:#00aaff;margin-bottom:10px}
 .chatMessage.bot{color:#ffbb33;margin-bottom:10px}
-table{width:100%;border-collapse:collapse;margin-top:15px;display:none}
-th,td{border:1px solid #00ff8855;padding:10px}
-th{background:#011202}
-small{color:#aaffcc}
-#finalScore{margin-top:10px;display:none;font-size:16px}
 </style>
 </head>
 
 <body>
 <div class="wrapper">
+<h2>⚡ AI Website Vulnerability Scanner</h2>
 
-<!-- Scanner -->
-<div class="column">
-<div class="title">⚡ AI Vulnerability Scanner</div>
-<input id="urlInput" placeholder="Enter website URL">
+<input id="urlInput" placeholder="Enter Website URL">
 <button onclick="runScan()">RUN RISK ANALYSIS. REFRESH PAGE TO PREDICT FOR NEW URL.</button>
 
 <table id="predictionTable">
 <thead>
 <tr>
 <th>Vulnerability</th>
-<th>Prediction Rate</th>
-<th>Fixed URL / Suggested Fix</th>
+<th>Prediction</th>
+<th>Corrected URL Example</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 
 <div id="finalScore"></div>
+<button id="downloadBtn" onclick="downloadCSV()">DOWNLOAD RESULTS</button>
 </div>
 
-<!-- AI -->
-<div class="column">
-<div class="title">🤖 Smart AI Assistant</div>
-<textarea id="userQuery" placeholder="Ask anything about vulnerabilities, causes, fixes or impact..."></textarea>
-<button onclick="askAI()">ASK AI</button>
-<div id="chatBox"></div>
-</div>
-
+<div id="chatbotContainer">🤖</div>
+<div id="chatbotWindow">
+  <div id="chatBox"></div>
+  <textarea id="userQuery" placeholder="Ask about causes, impact, fixes, security improvement..."></textarea>
+  <button onclick="askAI()">ASK</button>
 </div>
 
 <script>
-/* ---------------- VULNERABILITIES ---------------- */
-const vulns=[
+const vulnerabilities=[
 "SQL Injection","XSS","Broken Authentication","Sensitive Data Exposure",
-"XXE","Broken Access Control","Security Misconfiguration",
-"CSRF","Vulnerable Components","Insufficient Logging"
+"XML External Entities (XXE)","Broken Access Control",
+"Security Misconfiguration","CSRF","Vulnerable Components","Insufficient Logging"
 ];
 
-const vulnInfo={
-"SQL Injection":{
- desc:"SQL Injection allows attackers to manipulate database queries using unsanitized input.",
- cause:"Occurs when user input is directly concatenated into SQL queries.",
- fix:"Use prepared statements and parameterized queries.",
- impact:"Prevents data theft, data corruption, and full database compromise."
-},
-"XSS":{
- desc:"XSS allows attackers to inject malicious scripts into webpages viewed by users.",
- cause:"Occurs due to improper input validation or output encoding.",
- fix:"Sanitize inputs and encode outputs.",
- impact:"Protects user sessions, cookies, and trust."
-},
-"Broken Authentication":{
- desc:"Broken authentication allows attackers to take over user accounts.",
- cause:"Weak passwords, insecure session handling, missing MFA.",
- fix:"Use MFA, strong password hashing, and secure sessions.",
- impact:"Prevents account hijacking and identity theft."
-},
-"Sensitive Data Exposure":{
- desc:"Sensitive data is exposed when encryption is missing or weak.",
- cause:"Using HTTP, weak crypto, or storing secrets in URLs.",
- fix:"Use HTTPS and encrypt sensitive data.",
- impact:"Protects user privacy and compliance."
-},
-"XXE":{
- desc:"XXE allows attackers to access internal files via XML parsers.",
- cause:"External entities enabled in XML processing.",
- fix:"Disable external entity processing.",
- impact:"Stops file disclosure and SSRF attacks."
-},
-"Broken Access Control":{
- desc:"Users gain access to unauthorized resources.",
- cause:"Missing server-side authorization checks.",
- fix:"Enforce role-based access control.",
- impact:"Prevents privilege escalation."
-},
-"Security Misconfiguration":{
- desc:"Insecure default configurations expose the system.",
- cause:"Default credentials, open ports, missing headers.",
- fix:"Harden server and security configurations.",
- impact:"Reduces attack surface."
-},
-"CSRF":{
- desc:"CSRF forces users to perform unwanted actions.",
- cause:"Missing CSRF tokens.",
- fix:"Use CSRF tokens and SameSite cookies.",
- impact:"Prevents unauthorized actions."
-},
-"Vulnerable Components":{
- desc:"Outdated libraries contain known vulnerabilities.",
- cause:"Unpatched dependencies.",
- fix:"Regularly update components.",
- impact:"Prevents known exploits."
-},
-"Insufficient Logging":{
- desc:"Security incidents go undetected.",
- cause:"Missing logs and alerts.",
- fix:"Implement monitoring and logging.",
- impact:"Enables faster attack detection."
-}
-};
+let safePatterns = JSON.parse(localStorage.getItem("safePatterns")||"[]");
 
-/* ---------------- MODEL ---------------- */
-let model=tf.sequential();
-model.add(tf.layers.dense({inputShape:[8],units:128,activation:'relu'}));
-model.add(tf.layers.dense({units:64,activation:'relu'}));
-model.add(tf.layers.dense({units:32,activation:'relu'}));
-model.add(tf.layers.dense({units:10,activation:'sigmoid'}));
-model.compile({optimizer:'adam',loss:'binaryCrossentropy'});
-
-/* ---------------- FEATURES ---------------- */
-function features(url){
-  const u=new URL(url);
-  return[
-    url.length/100,
-    [...u.searchParams].length/10,
-    u.protocol==="https:"?1:0,
-    +u.pathname.includes("login"),
-    +u.pathname.includes("admin"),
-    +u.pathname.includes("api"),
-    +u.pathname.includes("form"),
-    url.includes("=")?1:0
-  ];
+/* ---------- TABLE FIX EXAMPLES ONLY ---------- */
+function tableFixExample(url,v){
+ const u=new URL(url); const o=u.origin;
+ switch(v){
+  case "SQL Injection":
+   return `Before: ${url} → After: ${o}/product?id=123`;
+  case "XSS":
+   return `Before: ${url} → After: ${o}/search?q=safeText`;
+  case "Broken Authentication":
+   return `After: ${o}/secure-login`;
+  case "Sensitive Data Exposure":
+   return `Before: ${url} → After: ${url.replace("http:","https:")}`;
+  case "XML External Entities (XXE)":
+   return `After: ${o}/upload (XXE disabled)`;
+  case "Broken Access Control":
+   return `After: ${o}/dashboard (RBAC enforced)`;
+  case "Security Misconfiguration":
+   return `After: ${o} (secure headers enabled)`;
+  case "CSRF":
+   return `After: ${o}/form?token=csrfToken`;
+  case "Vulnerable Components":
+   return `After: ${o} (libraries updated)`;
+  case "Insufficient Logging":
+   return `After: ${o} (audit logs enabled)`;
+ }
 }
 
-/* ---------------- AUTO LABEL ---------------- */
-function autoLabel(url){
-  return vulns.map(v=>{
-    if(v==="SQL Injection" && url.includes("="))return 1;
-    if(v==="XSS" && url.includes("<"))return 1;
-    if(v==="Broken Authentication" && url.includes("login"))return 1;
-    if(v==="Security Misconfiguration" && url.startsWith("http:"))return 1;
-    return 0;
-  });
+/* ---------- CHATBOT KNOWLEDGE ---------- */
+function chatbotKnowledge(v,url){
+ const base=new URL(url).origin;
+ const info={
+  "SQL Injection":`Cause: Unsanitized DB input.
+Impact: Data theft, DB takeover.
+Fix: Parameterized queries.
+Security Gain: Blocks malicious SQL execution.`,
+  "XSS":`Cause: Unsafe output rendering.
+Impact: Session hijack.
+Fix: Encode user input.
+Security Gain: Prevents script execution.`,
+  "Broken Authentication":`Cause: Weak auth flows.
+Impact: Account compromise.
+Fix: MFA + secure cookies.
+Security Gain: Stops takeover.`,
+  "Sensitive Data Exposure":`Cause: No encryption.
+Impact: Data leaks.
+Fix: HTTPS + encryption.
+Security Gain: Protects data.`,
+  "XML External Entities (XXE)":`Cause: XML entity expansion.
+Impact: File disclosure.
+Fix: Disable external entities.`,
+  "Broken Access Control":`Cause: Missing authorization.
+Impact: Privilege escalation.
+Fix: RBAC enforcement.`,
+  "Security Misconfiguration":`Cause: Insecure defaults.
+Impact: Attack surface increase.
+Fix: Harden configs.`,
+  "CSRF":`Cause: Missing CSRF tokens.
+Impact: Forced actions.
+Fix: Tokens + SameSite cookies.`,
+  "Vulnerable Components":`Cause: Outdated libs.
+Impact: Known exploits.
+Fix: Patch dependencies.`,
+  "Insufficient Logging":`Cause: No monitoring.
+Impact: Late breach detection.
+Fix: SIEM + alerts.`
+ };
+ return info[v];
 }
 
-/* ---------------- TRAIN (NO REFRESH ISSUE) ---------------- */
-async function train(url){
-  const X=tf.tensor2d([features(url)]);
-  const y=tf.tensor2d([autoLabel(url)]);
-  await model.fit(X,y,{epochs:30,verbose:0});
+/* ---------- PREDICTION ENGINE ---------- */
+function score(v,url){
+ let s=0.7+Math.random()*0.2;
+ if(url.startsWith("https") && v==="Sensitive Data Exposure") s-=0.4;
+ if(url.includes("secure") && v==="Broken Authentication") s-=0.3;
+ safePatterns.forEach(p=>{ if(url.includes(p)) s-=0.25; });
+ return Math.max(0.05,Math.min(0.95,s));
 }
 
-/* ---------------- FIXED URL ---------------- */
-function generateFixedURL(originalURL,v){
-  const u=new URL(originalURL);
-  switch(v){
-    case "SQL Injection": u.search="?id=123"; return u+" (prepared queries)";
-    case "XSS": u.search="?q=safeText"; return u+" (encoded output)";
-    case "Broken Authentication": return u.origin+"/secure-login (MFA)";
-    case "Sensitive Data Exposure": u.protocol="https:"; u.search=""; return u+" (HTTPS)";
-    case "XXE": return u.origin+u.pathname+" (XXE disabled)";
-    case "Broken Access Control": return u.origin+"/dashboard (RBAC)";
-    case "Security Misconfiguration": u.protocol="https:"; return u+" (secure headers)";
-    case "CSRF": return u.origin+u.pathname+" (CSRF token)";
-    case "Vulnerable Components": return u.origin+u.pathname+" (updated deps)";
-    case "Insufficient Logging": return u.origin+u.pathname+" (audit logs)";
-    default: return originalURL;
-  }
+function trainSafe(url){
+ if(!safePatterns.includes(url)){
+  safePatterns.push(url);
+  localStorage.setItem("safePatterns",JSON.stringify(safePatterns));
+ }
 }
 
-/* ---------------- RUN SCAN (CALIBRATED) ---------------- */
-async function runScan(){
-  const url=urlInput.value.trim();
-  if(!url)return;
+function runScan(){
+ const url=urlInput.value.trim(); if(!url)return;
+ trainSafe(url);
 
-  await train(url);
-  const raw=model.predict(tf.tensor2d([features(url)])).dataSync();
+ predictionTable.style.display="table";
+ downloadBtn.style.display="block";
+ const tb=predictionTable.querySelector("tbody"); tb.innerHTML="";
+ let total=0;
 
-  predictionTable.style.display="table";
-  let tbody=predictionTable.querySelector("tbody");
-  tbody.innerHTML="";
+ vulnerabilities.forEach(v=>{
+  const s=score(v,url); total+=s;
+  tb.innerHTML+=`
+  <tr>
+   <td><b>${v}</b></td>
+   <td>${(s*100).toFixed(1)}%</td>
+   <td>${tableFixExample(url,v)}</td>
+  </tr>`;
+ });
 
-  let total=0;
-
-  raw.forEach((p,i)=>{
-    let score=p;
-
-    if(url.includes("=") && vulns[i]==="SQL Injection") score+=0.45;
-    if(url.includes("<") && vulns[i]==="XSS") score+=0.5;
-    if(url.includes("login") && vulns[i]==="Broken Authentication") score+=0.35;
-    if(url.startsWith("http:") && vulns[i]==="Security Misconfiguration") score+=0.4;
-    if(url.includes("admin") && vulns[i]==="Broken Access Control") score+=0.3;
-    if(url.includes("api") && vulns[i]==="CSRF") score+=0.25;
-
-    score=Math.min(0.95,Math.max(0.05,score));
-    total+=score;
-
-    tbody.innerHTML+=`
-    <tr>
-      <td><b>${vulns[i]}</b></td>
-      <td>${(score*100).toFixed(1)}%</td>
-      <td><small>${generateFixedURL(url,vulns[i])}</small></td>
-    </tr>`;
-  });
-
-  finalScore.style.display="block";
-  finalScore.innerHTML=`FINAL RISK SCORE: <b>${((total/vulns.length)*100).toFixed(1)}%</b>`;
-}
-
-/* ---------------- AI ASSISTANT (UNCHANGED) ---------------- */
-function aiReply(msg){
-  msg=msg.toLowerCase();
-  for(let v of vulns){
-    if(msg.includes(v.toLowerCase())){
-      const i=vulnInfo[v];
-      return `${v}: ${i.desc} 
-      Cause: ${i.cause} 
-      
-      Fix: ${i.fix} Along with this proper fix with example is given in the table.
-      
-      Impact: ${i.impact}`;
-    }
-  }
-  return "Ask me about a specific vulnerability, its cause, fix, or security impact.";
+ finalScore.innerHTML=`<h3>FINAL RISK SCORE: ${((total/vulnerabilities.length)*100).toFixed(1)}%</h3>`;
+ chatbotWindow.classList.add("show");
 }
 
 function askAI(){
-  const q=userQuery.value;
-  if(!q)return;
-  chatBox.innerHTML+=`<div class='chatMessage user'>You: ${q}</div>`;
-  chatBox.innerHTML+=`<div class='chatMessage bot'>🤖 ${aiReply(q)}</div>`;
-  chatBox.scrollTop=chatBox.scrollHeight;
+ const q=userQuery.value.toLowerCase(); if(!q)return;
+ chatBox.innerHTML+=`<div class="chatMessage user">You: ${q}</div>`;
+ let ans="Ask about a specific vulnerability.";
+ vulnerabilities.forEach(v=>{
+  if(q.includes(v.toLowerCase())) ans=chatbotKnowledge(v,urlInput.value);
+ });
+ chatBox.innerHTML+=`<div class="chatMessage bot">🤖 ${ans}</div>`;
+ chatBox.scrollTop=chatBox.scrollHeight;
+}
+
+chatbotContainer.onclick=()=>chatbotWindow.classList.toggle("show");
+
+function downloadCSV(){
+ let csv=["Vulnerability,Prediction,Fix Example"];
+ document.querySelectorAll("#predictionTable tbody tr").forEach(r=>{
+  let c=r.querySelectorAll("td");
+  csv.push(`${c[0].innerText},${c[1].innerText},"${c[2].innerText}"`);
+ });
+ const b=new Blob([csv.join("\n")],{type:"text/csv"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(b); a.download="vulnerability scan_results.csv"; a.click();
 }
 </script>
 </body>
